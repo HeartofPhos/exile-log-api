@@ -1,0 +1,46 @@
+name: Build
+
+on:
+  workflow_call:
+  push:
+    branches: [ "main" ]
+
+concurrency:
+  group: ci-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_NAME: exile-log-api
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: windows-latest
+          artifact_suffix: -windows
+          artifact_extension: .exe
+        - os: ubuntu-latest
+          artifact_suffix: -ubuntu
+          artifact_extension: ""
+
+    name: Run `cargo check/test/build` on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build and Test
+        run: |
+          cargo check
+          cargo test
+          cargo build --release --bin ${{ env.APP_NAME }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APP_NAME }}${{ matrix.artifact_suffix }}
+          path: target/release/${{ env.APP_NAME }}${{ matrix.artifact_extension }}

@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags: [ "v*.*.*" ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts-dir
+          merge-multiple: true
+          skip-decompress: true
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: artifacts-dir/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
