@@ -2,12 +2,12 @@ use std::time::Duration;
 
 use anyhow::Context;
 use futures_util::{SinkExt, StreamExt};
-use log::info;
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::broadcast::Receiver,
 };
 use tokio_tungstenite::tungstenite::{self, Message};
+use tracing::info;
 
 pub async fn listen(addr: String, rx: Receiver<Vec<Message>>, timeout: Duration) {
     let try_socket = TcpListener::bind(&addr).await;

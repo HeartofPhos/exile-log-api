@@ -1,11 +1,10 @@
 use std::{io::Error, path::PathBuf, time::Duration};
 
 use clap::Parser;
-use env_logger::{Builder, Env};
-use log::info;
 use regex::RegexSet;
 use sysinfo::System;
 use tokio_tungstenite::tungstenite::Message;
+use tracing::info;
 
 mod log_reader;
 mod server;
@@ -23,8 +22,12 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let env = Env::default().filter_or("RUST_LOG", log::LevelFilter::Info.as_str());
-    Builder::from_env(env).init();
+    let (non_blocking, _guard) = tracing_appender::non_blocking(std::io::stdout());
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .with_ansi(false)
+        .with_writer(non_blocking)
+        .init();
 
     let args = Args::parse();
 
