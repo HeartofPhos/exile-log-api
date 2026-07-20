@@ -1,8 +1,10 @@
-use std::{io::Error, time::Duration};
+use std::{io::Error, path::PathBuf, time::Duration};
 
 use clap::Parser;
 use env_logger::{Builder, Env};
+use log::info;
 use regex::RegexSet;
+use sysinfo::System;
 use tokio_tungstenite::tungstenite::Message;
 
 mod log_reader;
@@ -25,12 +27,36 @@ async fn main() -> Result<(), Error> {
     Builder::from_env(env).init();
 
     let args = Args::parse();
+
+    info!("Waiting for PathOfExile client...");
+    let exe_folder: PathBuf = async {
+        let mut sys = System::new_all();
+        let mut interval = tokio::time::interval(Duration::from_secs(args.heart_beat));
+        loop {
+            sys.refresh_all();
+
+            for process in sys.processes_by_name("PathOfExile".as_ref()) {
+                if let Some(path) = process.exe()
+                    && let Some(parent) = path.parent()
+                {
+                    return parent.into();
+                }
+            }
+
+            interval.tick().await;
+        }
+    }
+    .await;
+
+    let log_path = exe_folder.join("logs").join("LatestClient.txt");
+    info!("Log file: {}", log_path.display());
+
     let (tx, rx) = tokio::sync::broadcast::channel(1);
 
     let listen = server::listen(args.address, rx, Duration::from_secs(args.client_timeout));
     let log = async move {
         let mut reader = log_reader::build(
-            "C:/Program Files (x86)/Steam/steamapps/common/Path of Exile/logs/LatestClient.txt",
+            log_path,
             RegexSet::new([r"Generating level \d+ area"]).unwrap(),
         );
 
