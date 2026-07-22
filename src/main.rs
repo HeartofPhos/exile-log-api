@@ -37,22 +37,26 @@ async fn main() -> Result<(), Error> {
         Some(log_path) => log_path,
         _ => {
             info!("Waiting for PathOfExile client...");
-            let exe_folder: PathBuf = async {
+
+            async {
                 let mut sys = System::new_all();
                 let mut interval = tokio::time::interval(Duration::from_secs(args.heart_beat));
                 loop {
                     sys.refresh_all();
 
-                    if let Some(process) = sys.processes_by_name("PathOfExile".as_ref()).next() {
-                        return process.cwd().expect("missing cwd").into();
+                    for process in sys.processes_by_name("PathOfExile".as_ref()) {
+                        if let Some(cwd) = process.cwd() {
+                            let log_path = cwd.join("logs").join("LatestClient.txt");
+                            if let Ok(true) = log_path.try_exists() {
+                                return log_path;
+                            }
+                        }
                     }
 
                     interval.tick().await;
                 }
             }
-            .await;
-
-            exe_folder.join("logs").join("LatestClient.txt")
+            .await
         }
     };
 
