@@ -35,13 +35,13 @@ impl Reader {
     }
 }
 
-pub fn build(path: impl Into<PathBuf>, patterns: RegexSet) -> Reader {
+pub fn build(path: impl Into<PathBuf>, patterns: RegexSet) -> Result<Reader, std::io::Error> {
     let mut reader = Reader {
         path: path.into(),
         patterns,
         byte_offset: 0,
     };
 
-    reader.read_latest(|_| {}).unwrap();
-    reader
+    reader.read_latest(|_| {})?;
+    Ok(reader)
 }

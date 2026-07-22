@@ -1,10 +1,10 @@
-use std::{io::Error, path::PathBuf, time::Duration};
+use std::{path::PathBuf, process::ExitCode, time::Duration};
 
 use clap::Parser;
 use regex::RegexSet;
 use sysinfo::System;
 use tokio_tungstenite::tungstenite::Message;
-use tracing::info;
+use tracing::{error, info};
 
 mod log_reader;
 mod server;
@@ -23,7 +23,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> ExitCode {
     let (non_blocking, _guard) = tracing_appender::non_blocking(std::io::stdout());
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -37,26 +37,26 @@ async fn main() -> Result<(), Error> {
         Some(log_path) => log_path,
         _ => {
             info!("Waiting for PathOfExile client...");
-            let exe_folder: PathBuf = async {
+
+            async {
                 let mut sys = System::new_all();
                 let mut interval = tokio::time::interval(Duration::from_secs(args.heart_beat));
                 loop {
                     sys.refresh_all();
 
                     for process in sys.processes_by_name("PathOfExile".as_ref()) {
-                        if let Some(path) = process.exe()
-                            && let Some(parent) = path.parent()
-                        {
-                            return parent.into();
+                        if let Some(cwd) = process.cwd() {
+                            let log_path = cwd.join("logs").join("LatestClient.txt");
+                            if let Ok(true) = log_path.try_exists() {
+                                return log_path;
+                            }
                         }
                     }
 
                     interval.tick().await;
                 }
             }
-            .await;
-
-            exe_folder.join("logs").join("LatestClient.txt")
+            .await
         }
     };
 
@@ -69,21 +69,27 @@ async fn main() -> Result<(), Error> {
         let mut reader = log_reader::build(
             log_path,
             RegexSet::new([r"Generating level \d+ area"]).unwrap(),
-        );
+        )?;
 
         let mut interval = tokio::time::interval(Duration::from_secs(args.heart_beat));
         loop {
             let mut messages = vec![Message::Ping(Default::default())];
-            let _ = reader.read_latest(|line| messages.push(line.into()));
+            reader.read_latest(|line| messages.push(line.into()))?;
             let _ = tx.send(messages);
             interval.tick().await;
         }
     };
 
-    tokio::select! {
-        _ = listen => (),
-        _ = log => (),
-    }
+    let res = tokio::select! {
+        res = listen => res,
+        res = log => res,
+    };
 
-    Ok(())
+    match res {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(err) => {
+            error!("{}", err);
+            ExitCode::FAILURE
+        }
+    }
 }

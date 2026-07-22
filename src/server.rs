@@ -9,12 +9,17 @@ use tokio::{
 use tokio_tungstenite::tungstenite::{self, Message};
 use tracing::info;
 
-pub async fn listen(addr: String, rx: Receiver<Vec<Message>>, timeout: Duration) {
+pub async fn listen(
+    addr: String,
+    rx: Receiver<Vec<Message>>,
+    timeout: Duration,
+) -> anyhow::Result<()> {
     let try_socket = TcpListener::bind(&addr).await;
-    let listener = try_socket.expect("Failed to bind");
+    let listener = try_socket?;
     info!("Listening on: {}", addr);
 
-    while let Ok((stream, _)) = listener.accept().await {
+    loop {
+        let (stream, _) = listener.accept().await?;
         let rx = rx.resubscribe();
         tokio::spawn(async move {
             if let Err(err) = accept_connection(stream, rx, timeout).await {
@@ -51,9 +56,6 @@ async fn accept_connection(
                 _ => Ok(()),
             }?;
         }
-
-        #[expect(unreachable_code)]
-        Ok(())
     };
 
     let write_handle = async {
@@ -65,9 +67,6 @@ async fn accept_connection(
 
             write.flush().await?;
         }
-
-        #[expect(unreachable_code)]
-        Ok(())
     };
 
     let res: anyhow::Result<()> = tokio::select! {
