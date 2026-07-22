@@ -14,6 +14,8 @@ mod server;
 struct Args {
     #[arg(long, default_value_t = { "127.0.0.1:6754".to_string() })]
     address: String,
+    #[arg(long)]
+    log_path: Option<PathBuf>,
     #[arg(long, default_value_t = 5)]
     client_timeout: u64,
     #[arg(long, default_value_t = 1)]
@@ -31,27 +33,33 @@ async fn main() -> Result<(), Error> {
 
     let args = Args::parse();
 
-    info!("Waiting for PathOfExile client...");
-    let exe_folder: PathBuf = async {
-        let mut sys = System::new_all();
-        let mut interval = tokio::time::interval(Duration::from_secs(args.heart_beat));
-        loop {
-            sys.refresh_all();
+    let log_path = match args.log_path {
+        Some(log_path) => log_path,
+        _ => {
+            info!("Waiting for PathOfExile client...");
+            let exe_folder: PathBuf = async {
+                let mut sys = System::new_all();
+                let mut interval = tokio::time::interval(Duration::from_secs(args.heart_beat));
+                loop {
+                    sys.refresh_all();
 
-            for process in sys.processes_by_name("PathOfExile".as_ref()) {
-                if let Some(path) = process.exe()
-                    && let Some(parent) = path.parent()
-                {
-                    return parent.into();
+                    for process in sys.processes_by_name("PathOfExile".as_ref()) {
+                        if let Some(path) = process.exe()
+                            && let Some(parent) = path.parent()
+                        {
+                            return parent.into();
+                        }
+                    }
+
+                    interval.tick().await;
                 }
             }
+            .await;
 
-            interval.tick().await;
+            exe_folder.join("logs").join("LatestClient.txt")
         }
-    }
-    .await;
+    };
 
-    let log_path = exe_folder.join("logs").join("LatestClient.txt");
     info!("Log file: {}", log_path.display());
 
     let (tx, rx) = tokio::sync::broadcast::channel(1);
