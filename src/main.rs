@@ -47,6 +47,7 @@ async fn main() -> Result<(), Error> {
                         if let Some(path) = process.exe()
                             && let Some(parent) = path.parent()
                         {
+                            info!("{:#?}", process);
                             return parent.into();
                         }
                     }
@@ -59,6 +60,8 @@ async fn main() -> Result<(), Error> {
             exe_folder.join("logs").join("LatestClient.txt")
         }
     };
+
+    return Ok(());
 
     info!("Log file: {}", log_path.display());
 
