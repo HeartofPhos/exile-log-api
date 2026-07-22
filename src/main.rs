@@ -43,13 +43,8 @@ async fn main() -> Result<(), Error> {
                 loop {
                     sys.refresh_all();
 
-                    for process in sys.processes_by_name("PathOfExile".as_ref()) {
-                        if let Some(path) = process.exe()
-                            && let Some(parent) = path.parent()
-                        {
-                            info!("{:#?}", process);
-                            return parent.into();
-                        }
+                    if let Some(process) = sys.processes_by_name("PathOfExile".as_ref()).next() {
+                        return process.cwd().expect("missing cwd").into();
                     }
 
                     interval.tick().await;
@@ -60,8 +55,6 @@ async fn main() -> Result<(), Error> {
             exe_folder.join("logs").join("LatestClient.txt")
         }
     };
-
-    return Ok(());
 
     info!("Log file: {}", log_path.display());
 
